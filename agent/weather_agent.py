@@ -43,6 +43,11 @@ def add(a, b):
     return a + b
 
 
+def run_command(command):
+    result = os.system(command)
+    return result
+
+
 available_tools = {
     "get_weather": {
         "fn": get_weather,
@@ -51,6 +56,10 @@ available_tools = {
     "add": {
         "fn": add,
         "description": "takes 2 numbers as an input and returns the sum",
+    },
+    "run_command": {
+        "fn": run_command,
+        "description": "takes a command as input and runs command in terminal and returns the result",
     },
 }
 
@@ -78,6 +87,7 @@ model = genai.GenerativeModel(
     Available tools :
     - get_weather(city): takes city as an input and returns the current weather for a city
     - add(a,b): takes 2 numbers as an input and returns the sum
+    - run_command: takes a command as input and runs command in terminal and returns the result
     
     Example : 
     User query : what is current weather of new york ?
@@ -215,4 +225,17 @@ while True:
 🧠 : The `get_weather` function returned a temperature of 29°C.  I need to convert this to Fahrenheit using the formula: F = (C * 9/5) + 32
 🧠 : I don't have a celsius_to_fahrenheit function. I will perform the conversion directly.
 🤖 : The weather in Mumbai is Haze and 84.2°F
+
+
+
+
+
+-------------      run_command ( )       -------------
+
+> create a magic.txt file           
+🧠 : The user wants to create a file named magic.txt.  No content is specified.
+🤖 : File magic.txt created successfully.
+> add hey there it;s gemini into this magic.txt 
+🧠 : The user wants to append the text "hey there it's gemini" to the file magic.txt.  I need to use the `run_command` tool to achieve this.
+🤖 : The text has been appended to magic.txt
 """
