@@ -1,1 +1,54 @@
+# Python virtual environment
+env/
+venv/
+.env/
+.venv/
+
+# Python package files
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+bin/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+*.dist-info/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Project specific
+agent/models/
+hello.py
 .env
+
+# Pip package files
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
