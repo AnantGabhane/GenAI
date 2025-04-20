@@ -1,103 +1,41 @@
-from dotenv import load_dotenv
-from google import generativeai as genai
-import os
 import json
-import subprocess
-import sys
+import os
+from google import generativeai
+from dotenv import load_dotenv
 
-def safe_json_loads(text):
-    """Parse JSON from text, handling various formats"""
-    print(f"Attempting to parse: {text}")
-    try:
-        # First try direct JSON parsing
-        return json.loads(text)
-    except json.JSONDecodeError:
-        try:
-            # Clean up the text by removing markdown code block markers
-            cleaned_text = text.replace('```json', '').replace('```', '').strip()
-            return json.loads(cleaned_text)
-        except json.JSONDecodeError:
-            try:
-                # Try to find and parse the last JSON object in the text
-                start = text.rfind("{")
-                end = text.rfind("}") + 1
-                if start != -1 and end != 0:
-                    json_str = text[start:end]
-                    return json.loads(json_str)
-            except:
-                print(f"Debug - Failed to parse response: {text}")
-                return {"step": "error", "content": "Failed to parse response"}
+# Load environment variables
+load_dotenv()
+api_key = os.getenv("GOOGLE_API_KEY")
+generativeai.configure(api_key=api_key)
 
-def create_file(filename: str, content: str = ""):
-    """Create a new file with optional content"""
-    print(f"🔧 Tool called: create_file {filename}")
+# Define tools
+def create_file(filename, content=""):
+    with open(filename, "w") as f:
+        f.write(content)
+    return {"status": "success", "message": f"File {filename} created successfully."}
+
+def run_command(command):
     try:
-        # Get absolute path
-        abs_path = os.path.abspath(filename)
-        print(f"Creating file at: {abs_path}")
-        
-        # Ensure the directory exists
-        directory = os.path.dirname(abs_path)
-        if directory and not os.path.exists(directory):
-            print(f"Creating directory: {directory}")
-            os.makedirs(directory)
-        
-        # Write file with explicit encoding
-        with open(abs_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-        
-        # Verify file was created
-        if os.path.exists(abs_path):
-            print(f"✅ File created successfully at: {abs_path}")
-            return f"✅ File {filename} created successfully"
-        else:
-            error_msg = f"❌ File creation failed: File does not exist after writing"
-            print(error_msg)
-            return error_msg
-            
+        result = os.popen(command).read()
+        return {"status": "success", "message": result}
     except Exception as e:
-        error_msg = f"❌ Error creating file: {str(e)}"
-        print(f"Detailed error: {str(e)}")
-        return error_msg
+        return {"status": "error", "message": str(e)}
 
-def run_command(command: str):
-    """Execute a shell command"""
-    print(f"🔧 Tool called: run_command {command}")
-    
-    # Check for sudo commands
-    if 'sudo' in command.lower().split():
-        return "❌ Security Error: Sudo commands are not allowed for safety reasons"
-    
+def install_package(package):
     try:
-        result = subprocess.run(command, shell=True, capture_output=True, text=True)
-        if result.returncode == 0:
-            return f"✅ Command executed successfully\nOutput: {result.stdout}"
-        return f"❌ Command failed: {result.stderr}"
+        os.system(f"pip install {package}")
+        return {"status": "success", "message": f"Package {package} installed successfully."}
     except Exception as e:
-        return f"❌ Error executing command: {str(e)}"
+        return {"status": "error", "message": str(e)}
 
-def install_package(package: str):
-    """Install a Python package using pip"""
-    print(f"🔧 Tool called: install_package {package}")
+def read_file(filename):
     try:
-        result = subprocess.run([sys.executable, '-m', 'pip', 'install', package],
-                              capture_output=True, text=True)
-        if result.returncode == 0:
-            return f"✅ Package {package} installed successfully"
-        return f"❌ Installation failed: {result.stderr}"
+        with open(filename, "r") as f:
+            return {"status": "success", "message": f.read()}
     except Exception as e:
-        return f"❌ Error installing package: {str(e)}"
+        return {"status": "error", "message": str(e)}
 
-def read_file(filename: str):
-    """Read content of a file"""
-    print(f"🔧 Tool called: read_file {filename}")
-    try:
-        with open(filename, 'r') as f:
-            content = f.read()
-        return f"📄 File contents:\n{content}"
-    except Exception as e:
-        return f"❌ Error reading file: {str(e)}"
-
+# Available tools dictionary
 available_tools = {
     "create_file": {
         "fn": create_file,
@@ -117,12 +55,9 @@ available_tools = {
     }
 }
 
-load_dotenv()
-api_key = os.getenv("GOOGLE_API_KEY")
-genai.configure(api_key=api_key)
-
-model = genai.GenerativeModel(
-    "gemini-1.5-flash",  # Changed from gemini-1.5-pro to gemini-1.5-flash
+# Configure Generative AI Model (Gemini)
+model = generativeai.GenerativeModel(
+    "gemini-1.5-flash",
     system_instruction="""You're an expert coding assistant who helps with programming tasks.
     You work in start, plan, action, observe mode.
     For user queries, plan the execution steps, select relevant tools, and provide helpful responses.
@@ -138,7 +73,7 @@ model = genai.GenerativeModel(
 
     Output JSON format:
     {
-        "step": "string (plan|action|output)",
+        "step": "string (plan|action|output|observe|error)",
         "content": "string",
         "function": "tool name for actions",
         "input": "parameters for the tool"
@@ -148,85 +83,94 @@ model = genai.GenerativeModel(
     - create_file(filename, content=""): Creates a new file with optional content
     - run_command(command): Executes a shell command (sudo commands not allowed)
     - install_package(package): Installs a Python package using pip
-    - read_file(filename): Reads and returns file contents
+    - read_file(filename): Reads and returns file contents. Parameter: filename
+
+    You can also use npm commands for frontend tasks. Available examples include:
+    - `npm install` to install frontend dependencies.
+    - `npm run build` to compile frontend code.
     """
 )
 
+def extract_json_from_text(text):
+    """Extract JSON objects from text that may contain markdown code blocks"""
+    if '```json' in text:
+        json_blocks = []
+        parts = text.split('```json\n')
+        for part in parts[1:]:  # Skip the first split as it's before any json block
+            if '\n```' in part:
+                json_str = part.split('\n```')[0]
+                try:
+                    json_blocks.append(json.loads(json_str))
+                except json.JSONDecodeError:
+                    continue
+        return json_blocks
+    return []
+
+def is_sudo_command(command: str) -> bool:
+    """Check if a command contains sudo"""
+    return command.strip().lower().startswith('sudo')
+
+def execute_action(action):
+    """Execute a single action based on the parsed JSON"""
+    if action.get('step') == 'plan':
+        print(f"🧠 Plan: {action['content']}")
+        return True
+    elif action.get('step') == 'action':
+        function_name = action.get('function')
+        if function_name == 'run_command':
+            command = action.get('input')
+            if isinstance(command, dict):
+                command = command.get('command', '')
+            if is_sudo_command(command):
+                print("🚫 Security Warning: Sudo commands are not allowed for security reasons")
+                return False
+        
+        if function_name in available_tools:
+            input_params = action.get('input', {})
+            if isinstance(input_params, dict):
+                result = available_tools[function_name]['fn'](**input_params)
+            else:
+                result = available_tools[function_name]['fn'](input_params)
+            print(f"✅ Action completed: {result['message']}")
+            return True
+    return False
+
+# Main function to interact with the user
 def main():
     print("🤖 Coding Assistant Ready! (Type 'exit' to quit)")
     print("Available commands:")
     print("- Create/read files")
     print("- Run shell commands (sudo not allowed)")
     print("- Install Python packages")
-    print("- Get coding help\n")
+    print("- Get coding help")
 
     while True:
-        try:
-            user_query = input("> ")
-            if user_query.lower() in ['exit', 'quit']:
-                print("👋 Goodbye!")
-                break
+        user_input = input("> ")
 
-            if 'sudo' in user_query.lower().split():
-                print("❌ Security Error: Sudo commands are not allowed for safety reasons")
-                continue
-
-            contents = [{"role": "user", "parts": [{"text": user_query}]}]
-
-            while True:
-                try:
-                    response = model.generate_content(contents=contents)
-                    if not response.text:
-                        print("Empty response received")
-                        break
-
-                    parsed_output = safe_json_loads(response.text)
-                    print(f"Debug - Parsed output: {json.dumps(parsed_output, indent=2)}")
-
-                    if parsed_output["step"] == "error":
-                        print("Error in parsed output")
-                        break
-
-                    if parsed_output["step"] == "plan":
-                        print(f"🧠 Planning: {parsed_output['content']}")
-                        contents.append({"role": "model", "parts": [{"text": json.dumps(parsed_output)}]})
-                        continue
-
-                    if parsed_output["step"] == "action":
-                        tool_name = parsed_output.get("function")
-                        tool_input = parsed_output.get("input")
-
-                        if tool_name in available_tools:
-                            try:
-                                if isinstance(tool_input, dict):
-                                    result = available_tools[tool_name]["fn"](**tool_input)
-                                else:
-                                    result = available_tools[tool_name]["fn"](tool_input)
-                                
-                                print(f"Tool execution result: {result}")
-                                
-                                if "❌" in result:  # If there was an error
-                                    break
-                                    
-                                contents.append({"role": "user", "parts": [{"text": json.dumps({"step": "observe", "content": result})}]})
-                                continue
-                            except Exception as e:
-                                print(f"❌ Tool execution error: {str(e)}")
-                                break
-
-                    if parsed_output["step"] == "output":
-                        print(f"✅ {parsed_output['content']}")
-                        break
-
-                except Exception as e:
-                    print(f"❌ Response processing error: {str(e)}")
-                    break
-
-        except KeyboardInterrupt:
-            print("\n👋 Goodbye!")
+        if user_input.lower() == 'exit':
             break
-        except Exception as e:
-            print(f"❌ Critical error: {str(e)}")
 
+        # Early check for sudo commands
+        if 'sudo' in user_input.lower():
+            print("🚫 Security Warning: Sudo commands are not allowed for security reasons")
+            continue
+
+        try:
+            response = model.generate_content(user_input)
+            text = response.candidates[0].content.parts[0].text
+            
+            # Extract and execute all JSON blocks in sequence
+            actions = extract_json_from_text(text)
+            if actions:
+                for action in actions:
+                    execute_action(action)
+            else:
+                print("❌ No valid actions found in response")
+                
+        except Exception as e:
+            print(f"❌ Error: {str(e)}")
+            print("🔎 Raw response:", response)
+
+# Run the assistant
 if __name__ == "__main__":
     main()
