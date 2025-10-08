@@ -1,0 +1,3 @@
+langgraph
+langgraph-checkpoint-mongodb
+python-dotenv
